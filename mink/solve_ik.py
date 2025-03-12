@@ -120,10 +120,11 @@ def solve_ik(
     configuration: Configuration,
     tasks: Sequence[Task],
     dt: float,
+    solver: str = 'mujoco_box_qp',
     damping: float = 1e-12,
     safety_break: bool = False,
     limits: Optional[Sequence[Limit]] = None,
-    prev_sol: Optional[np.ndarray] = None,
+    **kwargs,
 ) -> np.ndarray:
     """Solve the differential inverse kinematics problem.
 
@@ -134,18 +135,22 @@ def solve_ik(
         configuration: Robot configuration.
         tasks: List of kinematic tasks.
         dt: Integration timestep in [s].
+        solver: Backend quadratic programming (QP) solver.
         damping: Levenberg-Marquardt damping.
         safety_break: If True, stop execution and raise an exception if
             the current configuration is outside limits. If False, print a
             warning and continue execution.
         limits: List of limits to enforce. Set to empty list to disable. If None,
             defaults to a configuration limit.
+        kwargs: Keyword arguments to forward to the backend QP solver.
 
     Returns:
         Velocity `v` in tangent space.
     """
+    del solver
     configuration.check_limits(safety_break=safety_break)
     problem = build_ik(configuration, tasks, dt, damping, limits)
+    prev_sol = None or kwargs["prev_sol"] if "prev_sol" in kwargs
     dq = problem.solve(prev_sol)
     assert dq is not None
     v: np.ndarray = dq / dt
