@@ -150,7 +150,7 @@ def solve_ik(
     del solver
     configuration.check_limits(safety_break=safety_break)
     problem = build_ik(configuration, tasks, dt, damping, limits)
-    prev_sol = None or kwargs["prev_sol"] if "prev_sol" in kwargs
+    prev_sol = kwargs.get("prev_sol", None)
     dq = problem.solve(prev_sol)
     assert dq is not None
     v: np.ndarray = dq / dt
