@@ -2,7 +2,9 @@
 
 from .com_task import ComTask
 from .damping_task import DampingTask
+from .equality_constraint_task import EqualityConstraintTask
 from .exceptions import (
+    InvalidConstraint,
     InvalidDamping,
     InvalidGain,
     InvalidTarget,
@@ -15,6 +17,7 @@ from .relative_frame_task import RelativeFrameTask
 from .task import Objective, Task
 
 __all__ = (
+    "EqualityConstraintTask",
     "ComTask",
     "FrameTask",
     "Objective",
@@ -27,4 +30,5 @@ __all__ = (
     "TaskDefinitionError",
     "InvalidGain",
     "InvalidDamping",
+    "InvalidConstraint",
 )
