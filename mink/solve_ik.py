@@ -86,7 +86,7 @@ def _compute_qp_inequalities(
             upper_list.append(inequality.upper)
     if not lower_list:
         return None, None
-    lower = np.asarray(lower_list).min(axis=0)
+    lower = np.asarray(lower_list).max(axis=0)
     upper = np.asarray(upper_list).min(axis=0)
     return lower, upper
 
