@@ -38,7 +38,7 @@ Pose tracking with collision avoidance between the wrist and environment
 UR5e wrist camera look-at
 -------------------------
 
-A wrist-mounted RealSense keeps a moving target centered in its field of view
+A wrist-mounted camera keeps a moving target centered in its field of view
 using :class:`~mink.LookAtTask`.
 
 .. raw:: html
