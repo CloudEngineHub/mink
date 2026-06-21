@@ -1,22 +1,21 @@
-"""UR5e with a wrist-mounted Intel RealSense D435i that keeps a moving target
-centered in its field of view using :class:`mink.LookAtTask`.
+"""UR5e with a wrist-mounted camera that keeps a moving target centered in its field of
+view using :class:`mink.LookAtTask`.
 
 The look-at task only constrains *where* the camera points, leaving roll about the
 optical axis free, so the arm naturally orients the sensor toward the target while
 the rest of the body is regularized by a posture task.
 
-Watch the arm track the auto-orbiting target (press Tab to look through
-``wrist_cam``)::
+Watch the arm track the auto-orbiting target (press [ to cycle to the ``wrist_cam``)::
 
-    mjpython examples/arm_ur5e_wrist_cam_lookat.py
+    uv run mjpython examples/arm_ur5e_wrist_cam_lookat.py
 
 Drive the target yourself by dragging it in the viewer::
 
-    mjpython examples/arm_ur5e_wrist_cam_lookat.py --interactive
+    uv run mjpython examples/arm_ur5e_wrist_cam_lookat.py --interactive
 
-Record a side-by-side (third-person | onboard) video::
+Record a video with the onboard view inset::
 
-    python examples/arm_ur5e_wrist_cam_lookat.py --record lookat.mp4
+    uv run examples/arm_ur5e_wrist_cam_lookat.py --record lookat.mp4
 """
 
 import argparse
@@ -32,7 +31,7 @@ import mink
 
 _HERE = Path(__file__).parent
 _UR5E = _HERE / "universal_robots_ur5e" / "scene_wrist_cam.xml"
-_REALSENSE = _HERE / "realsense_d435i.xml"
+_CAMERA = _HERE / "camera.xml"
 
 # Pose of the camera/sensor on the wrist. The quaternion rotates +90 deg about the
 # local x-axis so that the frame's -z axis (the MuJoCo camera optical axis) points
@@ -50,22 +49,19 @@ _JOINTS = ["shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wris
 
 
 def build_model() -> mujoco.MjModel:
-    """Assemble the UR5e scene with a wrist-mounted RealSense camera."""
+    """Assemble the UR5e scene with a wrist-mounted camera."""
     spec = mujoco.MjSpec.from_file(_UR5E.as_posix())
     wrist = spec.body("wrist_3_link")
 
-    realsense = mujoco.MjSpec.from_file(_REALSENSE.as_posix())
+    camera = mujoco.MjSpec.from_file(_CAMERA.as_posix())
     frame = wrist.add_frame(pos=_SENSOR_POS, quat=_MOUNT_QUAT)
-    frame.attach_body(realsense.body("d435i"), "rs_", "")
+    frame.attach_body(camera.body("camera"), "cam_", "")
 
-    # Co-located camera and site sharing the optical frame: the site is what the
-    # look-at task controls, the camera is what we render the onboard view from.
     wrist.add_camera(name="wrist_cam", pos=_CAM_POS, quat=_MOUNT_QUAT, fovy=70)
     wrist.add_site(
         name="wrist_cam_site", pos=_CAM_POS, quat=_MOUNT_QUAT, size=[0.005] * 3, group=4
     )
     model = spec.compile()
-    # Reset the target mocap to its default spot (Backspace restores body_pos).
     model.body_pos[model.body("target").id] = _DEFAULT_TARGET
     return model
 
@@ -86,16 +82,10 @@ def _build_tasks(model: mujoco.MjModel, configuration: mink.Configuration):
         cost=1.0,
         lm_damping=1e-3,
     )
-    # Let the whole arm reorient to follow the target (like turning your body to
-    # keep something in view) rather than pinning the camera in place: a fixed
-    # position would force the wrist through singularities. The posture task keeps
-    # the arm near its rest pose, which also keeps a natural standoff from the
-    # target so the camera never drives onto it (where look-at is ill-conditioned).
+
     posture_task = mink.PostureTask(model, cost=1e-2)
     posture_task.set_target_from_configuration(configuration)
 
-    # Cap joint velocities so the camera slews smoothly to a new target instead of
-    # snapping in a single step.
     max_velocities = dict.fromkeys(_JOINTS, np.pi)
     limits = [
         mink.ConfigurationLimit(model),
@@ -175,15 +165,10 @@ def run_viewer(model: mujoco.MjModel, interactive: bool = False) -> None:
         rate = RateLimiter(frequency=200.0, warn=False)
         elapsed = 0.0
         while viewer.is_running():
-            # The viewer's reset (Backspace) calls mj_resetData, which sends every
-            # joint to qpos0 (the model reference pose) -- here, the arm fully
-            # extended and pointing away. Detect that and restore the locked-on
-            # viewing pose instead of letting the IK slew out of the singularity.
             if np.allclose(data.qpos, model.qpos0):
                 configuration.update(initial_qpos)
                 elapsed = 0.0
             if not interactive:
-                # Drive the target along a fixed orbit so the demo runs hands-free.
                 data.mocap_pos[target_mid] = orbit_target(elapsed)
                 elapsed += rate.dt
             step(data.mocap_pos[target_mid].copy(), rate.dt)

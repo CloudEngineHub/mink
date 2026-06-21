@@ -39,9 +39,7 @@ UR5e wrist camera look-at
 -------------------------
 
 A wrist-mounted RealSense keeps a moving target centered in its field of view
-using :class:`~mink.LookAtTask`, with the onboard camera feed inset in the
-corner. Because the task only constrains *where* the camera points, roll about
-the optical axis stays free.
+using :class:`~mink.LookAtTask`.
 
 .. raw:: html
 
