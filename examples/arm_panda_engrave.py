@@ -58,9 +58,6 @@ _ZBASE = _DOME.min() - 0.001
 _ZTOP = _DOME.max()
 
 
-# --- The surface: a dome, and the M engraved into it. ---------------------------
-
-
 def _resize(a: np.ndarray, n: int) -> np.ndarray:
     r = np.clip((np.arange(n) * a.shape[0] / n).astype(int), 0, a.shape[0] - 1)
     c = np.clip((np.arange(n) * a.shape[1] / n).astype(int), 0, a.shape[1] - 1)
@@ -75,7 +72,7 @@ def _glyph_mask() -> np.ndarray:
     inset = int(_GRID * (1 - _PATCH / _HALF) / 2)
     inner = _GRID - 2 * inset
     grid = np.zeros((_GRID, _GRID))
-    grid[inset : inset + inner, inset : inset + inner] = _resize(img, inner) > 0.5
+    grid[inset : inset + inner, inset : inset + inner] = _resize(img, inner)
     return np.rot90((grid > 0.5).astype(np.uint8))
 
 
@@ -192,7 +189,7 @@ def build_model() -> mujoco.MjModel:
         nrow=_GRID,
         ncol=_GRID,
         size=[_HALF, _HALF, _ZTOP - _ZBASE, 0.08],
-        userdata=((_DOME - _ZBASE) / (_ZTOP - _ZBASE)).ravel().tolist(),
+        userdata=_flat_field().ravel().tolist(),
     )
     body = spec.worldbody.add_body(
         name="block", pos=[_BLOCK_XY[0], _BLOCK_XY[1], _ZBASE]
@@ -204,14 +201,13 @@ def build_model() -> mujoco.MjModel:
     return spec.compile()
 
 
-def carve(model, field, a, b):
+def carve(field, a, b):
     """Remove material along the swept segment a->b (local block coords)."""
     ab = b - a
     L2 = ab @ ab + 1e-12
     t = np.clip(((_XX - a[0]) * ab[0] + (_YY - a[1]) * ab[1]) / L2, 0, 1)
     dd = (_XX - (a[0] + t * ab[0])) ** 2 + (_YY - (a[1] + t * ab[1])) ** 2
     np.minimum(field, np.where(dd < _CARVE_R**2, _TARGET, 1e9), out=field)
-    model.hfield_data[:] = np.clip(field, 0, 1).ravel()
 
 
 def _tool_state(model, data, site_id):
@@ -266,7 +262,9 @@ def plan(model: mujoco.MjModel, level: bool) -> np.ndarray:
 
     seek(0.0)
     for _ in range(300):  # settle onto the start (lifted above the first point)
-        vel = mink.solve_ik(configuration, tasks, 1 / 200, "daqp", 1e-2, limits=limits)
+        vel = mink.solve_ik(
+            configuration, tasks, 1 / 200, "daqp", damping=1e-2, limits=limits
+        )
         configuration.integrate_inplace(vel, 1 / 200)
 
     frames = int(np.clip(_CUM[-1] / 0.0022, 600, 1300))
@@ -275,7 +273,7 @@ def plan(model: mujoco.MjModel, level: bool) -> np.ndarray:
         seek(k / (frames - 1))
         for _ in range(6):
             vel = mink.solve_ik(
-                configuration, tasks, 1 / 200, "daqp", 1e-2, limits=limits
+                configuration, tasks, 1 / 200, "daqp", damping=1e-2, limits=limits
             )
             configuration.integrate_inplace(vel, 1 / 200)
         qraw[k] = configuration.q
@@ -333,11 +331,11 @@ def main() -> None:
             mujoco.mj_forward(model, data)
             local, cutting = _tool_state(model, data, site_id)
             if cutting and prev is not None:
-                carve(model, field, prev, local)
+                carve(field, prev, local)
                 dirty = True
             prev = local
-            # Re-uploading the heightfield blocks the render thread, so throttle it.
-            if dirty and k % 3 == 0:
+            if dirty:  # re-upload the carved heightfield only when it changed
+                model.hfield_data[:] = np.clip(field, 0, 1).ravel()
                 viewer.update_hfield(0)
                 dirty = False
             viewer.sync()
