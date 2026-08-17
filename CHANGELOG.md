@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-17
+
 ### Changed
 
 - Documented DOF freezing: new tutorial section with video, a derivation of the reduced-QP equivalence, and docstring fixes. The docstring's joint-name recipe now covers ball and free joints, and the examples demonstrate the constraint.
